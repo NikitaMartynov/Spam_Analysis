@@ -7,6 +7,7 @@
 # to a pre-configured folder
 #
 import getopt
+import argparse
 import sys
 import time
 import requests
@@ -15,7 +16,7 @@ import base64
 from eml_parser import eml_parser
 
 
-_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
+_vt_api_key = ''
 
 # where to save attachments to
 _out_path = '/parsed_output'
@@ -24,6 +25,7 @@ _attachment_hashes_filename = 'attachments_hashes'
 _attachment_hashes_vt_filename = 'attachments_hashes_vt'
 _vt_hashes_filename = 'attachments_hashes_vt'
 _vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
+_vt_resubmited_hashes_filename = 'attachments_hashes_vt_resubmited'
 
 _not_present_in_virustotal = "not present"
 
@@ -93,14 +95,46 @@ def submit_hashes_to_virustotal():
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
                     print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              response_json['response_code'],
-                                                                              response_json['positives'],
-                                                                              response_json['total'],
+                                                                              str(response_json['response_code']),
+                                                                              str(response_json['positives']),
+                                                                              str(response_json['total']),
                                                                               ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
-                    print_line = "{0:s} unexpected response code: {1:s}".format(line, response_json['response_code'])
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line, str(response_json['response_code']))
+                    fd_out.write(print_line)
+                    print print_line
+                time.sleep(15)
+
+
+def resubmit_hashes_to_virustotal(filename):
+    hashes_filename_full = os.path.join(_out_path, filename)
+    vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
+    with open(hashes_filename_full, 'r') as fd:
+        with open(vt_hashes_filename_full, 'w') as fd_out:
+            for line in fd.readlines():
+                if _not_present_in_virustotal not in line: #dif here
+                    continue
+                params = {'apikey': _vt_api_key, 'resource': rtrunc_at(line, ' | ')}
+                response = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
+
+                response_json = response.json()
+                if response_json['response_code'] == 0:
+                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print (print_line)
+                    fd_out.write(print_line)
+                elif response_json['response_code'] == 1:
+                    last_part = ltrunc_at(line, ' | ', 2) #dif here
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                              str(response_json['response_code']),
+                                                                              str(response_json['positives']),
+                                                                              str(response_json['total']),
+                                                                              last_part)
+                    fd_out.write(print_line)
+                    print print_line
+                else:
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line, str(response_json['response_code']))
                     fd_out.write(print_line)
                     print print_line
                 time.sleep(15)
@@ -152,10 +186,9 @@ def main(argv):
     if not os.path.exists(_attachments_path):
         os.makedirs(_attachments_path)
 
-    #filename_resubmit_hashes = 'attachments_hashes_vt'
-
+    filename_resubmit_hashes = _vt_unknown_hashes_filename
     try:
-        opts, args = getopt.getopt(argv, "hpmufnr:", ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes="])
+        opts, args = getopt.getopt(argv, "hpmufnr", ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes"])
     except getopt.GetoptError:
         # TODO insert usage function
         print 'wrong usage'
@@ -173,10 +206,9 @@ def main(argv):
             submit_files_to_virustotal()
         elif opt in ("-n", "--unknownfiles"):
             submit_unknown_files_to_virustotal()
-       # elif opt in ("-r", "--remd5hashes"):
-       #     if bool(arg):
-       #         filename_resubmit_hashes = arg
-       #     submit_hashes_to_virustotal()
+        elif opt in ("-r", "--remd5hashes"):
+            get_unknown_to_virustotal_hashes()
+            resubmit_hashes_to_virustotal(filename_resubmit_hashes)
 
 
 if __name__ == "__main__":
