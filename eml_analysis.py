@@ -15,12 +15,23 @@ import base64
 from eml_parser import eml_parser
 
 # where to save attachments to
-_out_path = ''
-_vt_api_key = 'w'
+_out_path = '/parsed_output'
+_vt_api_key = ''
+_attachment_hashes_filename = 'attachments_hashes'
+
+
+def rtrunc_at(s, d, n=1):
+    "Returns s truncated from the right at the n'th (3rd by default) occurrence of the delimiter, d."
+    return d.join(s.split(d)[:n])
+
+
+def ltrunc_at(s, d, n=1):
+    "Returns s truncated from the left at the n'th (3rd by default) occurrence of the delimiter, d."
+    return d.join(s.split(d)[n:])
 
 
 def parse():
-    hashes_filename = os.path.join(_out_path, 'attachments_hashes')
+    hashes_filename = os.path.join(_out_path, _attachment_hashes_filename)
     open(hashes_filename, 'wb').close()
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
@@ -58,14 +69,43 @@ def parse():
         print
 
 
+def submit_hashes_to_virustotal():
+    hashes_filename = os.path.join(_out_path, _attachment_hashes_filename)
+    vt_hashes_filename = hashes_filename + '_vt'
+    with open(hashes_filename, 'r') as fd:
+        with open(vt_hashes_filename, 'wb') as fd_out:
+            for line in fd.readlines():
+                params = {'apikey': _vt_api_key, 'resource': rtrunc_at(line, ' | ')}
+                response = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
+
+                response_json = response.json()
+                if response_json['response_code'] == 0:
+                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print (print_line)
+                    fd_out.write(print_line)
+                elif response_json['response_code'] == 1:
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                              response_json['response_code'],
+                                                                              response_json['positives'],
+                                                                              response_json['total'],
+                                                                              ltrunc_at(line, ' | '))
+                    fd_out.write(print_line)
+                    print print_line
+                else:
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line, response_json['response_code'])
+                    fd_out.write(print_line)
+                    print print_line
+                time.sleep(15)
+
+
 def main(argv):
     global _out_path
-    _out_path = os.getcwd() + '/parsed_output'
+    _out_path = os.getcwd() + _out_path
     if not os.path.exists(_out_path):
         os.makedirs(_out_path)
 
     try:
-        opts, args = getopt.getopt(argv, "hphua", ["help", "parse", "hashes", "urls", "attachments" ])
+        opts, args = getopt.getopt(argv, "hpmua", ["help", "parse", "md5hashes", "urls", "attachments"])
     except getopt.GetoptError:
         # TODO insert usage function
         print 'wrong usage'
@@ -77,10 +117,8 @@ def main(argv):
             sys.exit()
         elif opt in ("-p", "--parse"):
             parse()
-        elif opt in ("-h", "--hashes"):
-            # TODO insert hashes submission
-            print 'TODO insert hashes submission'
-           # submit_all_hashes_to_virustotal()
+        elif opt in ("-m", "--md5hashes"):
+            submit_hashes_to_virustotal()
 
 
 if __name__ == "__main__":
