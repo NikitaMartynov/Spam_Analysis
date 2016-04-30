@@ -14,10 +14,18 @@ import os
 import base64
 from eml_parser import eml_parser
 
+
+_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
+
 # where to save attachments to
 _out_path = '/parsed_output'
-_vt_api_key = ''
+_attachments_path = '/parsed_output/attachments'
 _attachment_hashes_filename = 'attachments_hashes'
+_attachment_hashes_vt_filename = 'attachments_hashes_vt'
+_vt_hashes_filename = 'attachments_hashes_vt'
+_vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
+
+_not_present_in_virustotal = "not present"
 
 
 def rtrunc_at(s, d, n=1):
@@ -31,8 +39,8 @@ def ltrunc_at(s, d, n=1):
 
 
 def parse():
-    hashes_filename = os.path.join(_out_path, _attachment_hashes_filename)
-    open(hashes_filename, 'wb').close()
+    hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
+    open(hashes_filename_full, 'wb').close()
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
             print 'Parsing: ', eml_filename
@@ -47,15 +55,15 @@ def parse():
                     else:
                         filename = a['filename']
 
-                    filename_path = os.path.join(_out_path, filename)
+                    filename_path = os.path.join(_attachments_path, filename)
 
                     print '\tWriting attachment:', filename_path
                     with open(filename_path, 'wb') as a_out:
                         a_out.write(base64.b64decode(a['raw']))
 
                     # fetching hash
-                    print '\tWriting hashes:', hashes_filename
-                    with open(hashes_filename, 'wb+') as a_out2:
+                    print '\tWriting hashes:', hashes_filename_full
+                    with open(hashes_filename_full, 'wb+') as a_out2:
                         a_out2.write("%s | %s | %s\n" % (a['hashes']['md5'], eml_filename, filename))
 
             # fetching urls
@@ -70,10 +78,10 @@ def parse():
 
 
 def submit_hashes_to_virustotal():
-    hashes_filename = os.path.join(_out_path, _attachment_hashes_filename)
-    vt_hashes_filename = hashes_filename + '_vt'
-    with open(hashes_filename, 'r') as fd:
-        with open(vt_hashes_filename, 'wb') as fd_out:
+    hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
+    vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
+    with open(hashes_filename_full, 'r') as fd:
+        with open(vt_hashes_filename_full, 'wb') as fd_out:
             for line in fd.readlines():
                 params = {'apikey': _vt_api_key, 'resource': rtrunc_at(line, ' | ')}
                 response = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
@@ -98,14 +106,56 @@ def submit_hashes_to_virustotal():
                 time.sleep(15)
 
 
+def submit_file_to_virustotal(filename):
+    filename_full = os.path.join(_attachments_path, filename)
+    payload = {'apikey': _vt_api_key}
+    files = {'file': (filename, open(filename_full, 'rb'))}
+    print "Submitting", filename,
+    response = requests.post("https://www.virustotal.com/vtapi/v2/file/scan", data=payload, files=files)
+    response_json = response.json()
+    print response_json['md5'], response_json['verbose_msg']
+    time.sleep(15)
+
+
+def submit_files_to_virustotal():
+    for root, dirs, filenames in os.walk(_attachments_path):
+        for fn in filenames:
+            submit_file_to_virustotal(fn)
+
+
+def get_unknown_to_virustotal_hashes():
+    vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
+    vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
+    with open(vt_hashes_filename_full, 'r') as f:
+        with open(vt_unknown_hashes_filename_full, 'wb') as f_out:
+            for line in f.readlines():
+                if _not_present_in_virustotal not in line:
+                    continue
+                f_out.write(line)
+
+
+def submit_unknown_files_to_virustotal():
+    vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
+    with open(vt_unknown_hashes_filename_full, 'r') as f:
+        for line in f.readlines():
+            submit_file_to_virustotal(ltrunc_at(line, ' | ', 3).rstrip('\n'))
+
+
 def main(argv):
     global _out_path
+    global _attachments_path
     _out_path = os.getcwd() + _out_path
+    _attachments_path = os.getcwd() + _attachments_path
+
     if not os.path.exists(_out_path):
         os.makedirs(_out_path)
+    if not os.path.exists(_attachments_path):
+        os.makedirs(_attachments_path)
+
+    #filename_resubmit_hashes = 'attachments_hashes_vt'
 
     try:
-        opts, args = getopt.getopt(argv, "hpmua", ["help", "parse", "md5hashes", "urls", "attachments"])
+        opts, args = getopt.getopt(argv, "hpmufnr:", ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes="])
     except getopt.GetoptError:
         # TODO insert usage function
         print 'wrong usage'
@@ -119,6 +169,14 @@ def main(argv):
             parse()
         elif opt in ("-m", "--md5hashes"):
             submit_hashes_to_virustotal()
+        elif opt in ("-f", "--files"):
+            submit_files_to_virustotal()
+        elif opt in ("-n", "--unknownfiles"):
+            submit_unknown_files_to_virustotal()
+       # elif opt in ("-r", "--remd5hashes"):
+       #     if bool(arg):
+       #         filename_resubmit_hashes = arg
+       #     submit_hashes_to_virustotal()
 
 
 if __name__ == "__main__":
