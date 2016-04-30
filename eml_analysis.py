@@ -20,6 +20,8 @@ _vt_api_key = 'w'
 
 
 def parse():
+    hashes_filename = os.path.join(_out_path, 'attachments_hashes')
+    open(hashes_filename, 'wb').close()
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
             print 'Parsing: ', eml_filename
@@ -28,9 +30,6 @@ def parse():
 
             # fetching attachments and their hashes
             if bool(eml_parsed['attachments']):
-                hashes_filename = os.path.join(_out_path, eml_filename + 'attachments_hashes')
-                open(hashes_filename, 'wb').close()
-
                 for a_id, a in eml_parsed['attachments'].items():
                     if a['filename'] == '':
                         filename = a_id
@@ -46,7 +45,7 @@ def parse():
                     # fetching hash
                     print '\tWriting hashes:', hashes_filename
                     with open(hashes_filename, 'wb+') as a_out2:
-                        a_out2.write("%s %s\n" % (a['hashes']['md5'], filename))
+                        a_out2.write("%s | %s | %s\n" % (a['hashes']['md5'], eml_filename, filename))
 
             # fetching urls
             filename = os.path.join(_out_path, eml_filename + '-extracted_urls')
