@@ -26,6 +26,7 @@ _attachment_hashes_vt_filename = 'attachments_hashes_vt'
 _vt_hashes_filename = 'attachments_hashes_vt'
 _vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
 _vt_resubmited_hashes_filename = 'attachments_hashes_vt_resubmited'
+_extracted_urls_filename = 'extracted_urls'
 
 _not_present_in_vt = "not present"
 
@@ -42,7 +43,9 @@ def ltrunc_at(s, d, n=1):
 
 def parse():
     hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
+    urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
     open(hashes_filename_full, 'wb').close()
+    open(urls_filename_full, 'wb').close()
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
             print 'Parsing: ', eml_filename
@@ -65,17 +68,16 @@ def parse():
 
                     # fetching hash
                     print '\tWriting hashes:', hashes_filename_full
-                    with open(hashes_filename_full, 'wb+') as a_out2:
+                    with open(hashes_filename_full, 'a') as a_out2:
                         a_out2.write("%s | %s | %s\n" % (a['hashes']['md5'], eml_filename, filename))
 
             # fetching urls
-            filename = os.path.join(_out_path, eml_filename + '-extracted_urls')
-            print '\tWriting urls:', filename
-            with open(filename, 'wb') as a_out:
+            print '\tWriting urls:', urls_filename_full
+            with open(urls_filename_full, 'a') as a_out:
                 for url in eml_parsed['urls']:
                     # cut out trailer of the next line. Check if it is correct thing to do
                     url = url.split('\r\n')[0]
-                    a_out.write("%s\n" % url)
+                    a_out.write("%s | %s\n" % (eml_filename, url))
         print
 
 
