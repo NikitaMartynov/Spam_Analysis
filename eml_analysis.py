@@ -33,7 +33,7 @@
 # -reuvt, --reurlstovt  Pulls reports from virustotal on all previously
 #                       unknown extracted urls.
 #
-# Example of a quite full usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
+# Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
 #
 import argparse
 import time
@@ -298,7 +298,8 @@ def main():
         os.makedirs(_attachments_path)
 
     parser = argparse.ArgumentParser(prog='eml_analysis', description='Analyses all emails by parsing and checking '
-                                                                      'against virustotal.')
+                                                                      'against virustotal.',
+                                     epilog='Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt')
     parser.add_argument('-p', '--parse', action="store_true", default=False,
                         help="Parses all emails in current location and places all extracted urls, attachments and "
                              "their hashes in the corresponding files under ./parsed_output dir.")
