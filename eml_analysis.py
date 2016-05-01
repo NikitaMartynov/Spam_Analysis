@@ -27,7 +27,7 @@ _vt_hashes_filename = 'attachments_hashes_vt'
 _vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
 _vt_resubmited_hashes_filename = 'attachments_hashes_vt_resubmited'
 
-_not_present_in_virustotal = "not present"
+_not_present_in_vt = "not present"
 
 
 def rtrunc_at(s, d, n=1):
@@ -79,7 +79,7 @@ def parse():
         print
 
 
-def submit_hashes_to_virustotal():
+def query_report_on_hashes_from_vt():
     hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
     vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
     with open(hashes_filename_full, 'r') as fd:
@@ -108,13 +108,13 @@ def submit_hashes_to_virustotal():
                 time.sleep(15)
 
 
-def resubmit_hashes_to_virustotal(filename):
+def requery_report_on_hashes_from_vt(filename):
     hashes_filename_full = os.path.join(_out_path, filename)
     vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
     with open(hashes_filename_full, 'r') as fd:
         with open(vt_hashes_filename_full, 'w') as fd_out:
             for line in fd.readlines():
-                if _not_present_in_virustotal not in line: #dif here
+                if _not_present_in_vt not in line: #dif here
                     continue
                 params = {'apikey': _vt_api_key, 'resource': rtrunc_at(line, ' | ')}
                 response = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
@@ -157,13 +157,13 @@ def submit_files_to_virustotal():
             submit_file_to_virustotal(fn)
 
 
-def get_unknown_to_virustotal_hashes():
+def get_unknown_to_vt_hashes():
     vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
     vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
     with open(vt_hashes_filename_full, 'r') as f:
         with open(vt_unknown_hashes_filename_full, 'wb') as f_out:
             for line in f.readlines():
-                if _not_present_in_virustotal not in line:
+                if _not_present_in_vt not in line:
                     continue
                 f_out.write(line)
 
@@ -173,6 +173,9 @@ def submit_unknown_files_to_virustotal():
     with open(vt_unknown_hashes_filename_full, 'r') as f:
         for line in f.readlines():
             submit_file_to_virustotal(ltrunc_at(line, ' | ', 3).rstrip('\n'))
+
+
+#def get_url_report_from_vt():
 
 
 def main(argv):
@@ -201,14 +204,14 @@ def main(argv):
         elif opt in ("-p", "--parse"):
             parse()
         elif opt in ("-m", "--md5hashes"):
-            submit_hashes_to_virustotal()
+            query_report_on_hashes_from_vt()
         elif opt in ("-f", "--files"):
             submit_files_to_virustotal()
         elif opt in ("-n", "--unknownfiles"):
             submit_unknown_files_to_virustotal()
         elif opt in ("-r", "--remd5hashes"):
-            get_unknown_to_virustotal_hashes()
-            resubmit_hashes_to_virustotal(filename_resubmit_hashes)
+            get_unknown_to_vt_hashes()
+            requery_report_on_hashes_from_vt(filename_resubmit_hashes)
 
 
 if __name__ == "__main__":
