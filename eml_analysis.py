@@ -15,7 +15,6 @@ import os
 import base64
 from eml_parser import eml_parser
 
-
 _vt_api_key = ''
 
 # where to save attachments to
@@ -27,6 +26,9 @@ _vt_hashes_filename = 'attachments_hashes_vt'
 _vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
 _vt_resubmited_hashes_filename = 'attachments_hashes_vt_resubmited'
 _extracted_urls_filename = 'extracted_urls'
+_vt_extracted_urls_filename = 'extracted_urls_vt'
+_vt_unknown_extracted_urls_filename = 'extracted_urls_vt_unknown'
+_vt_resubmited_extracted_urls_filename = 'extracted_urls_vt_resubmited'
 
 _not_present_in_vt = "not present"
 
@@ -96,27 +98,42 @@ def query_report_on_hashes_from_vt():
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} {4:s} | {5:s}\n".format(rtrunc_at(line, ' | '),
                                                                               str(response_json['response_code']),
                                                                               str(response_json['positives']),
                                                                               str(response_json['total']),
+                                                                              str(response_json['scan_date']),
                                                                               ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
-                    print_line = "{0:s} unexpected response code: {1:s}".format(line, str(response_json['response_code']))
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line,
+                                                                                str(response_json['response_code']))
                     fd_out.write(print_line)
                     print print_line
                 time.sleep(15)
 
 
-def requery_report_on_hashes_from_vt(filename):
-    hashes_filename_full = os.path.join(_out_path, filename)
-    vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
+def get_unknown_to_vt(unsorted_filename, sorted_output_filename):
+    vt_filename_full = os.path.join(_out_path, unsorted_filename)
+    vt_unknown_filename_full = os.path.join(_out_path, sorted_output_filename)
+    with open(vt_filename_full, 'r') as f:
+        with open(vt_unknown_filename_full, 'wb') as f_out:
+            for line in f.readlines():
+                if _not_present_in_vt not in line:
+                    continue
+                f_out.write(line)
+
+
+# TODO see if make sense to refactor this func with similar
+def requery_report_on_hashes_from_vt():
+    get_unknown_to_vt(_vt_hashes_filename, _vt_unknown_hashes_filename)  # dif here
+    hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)  # dif here
+    vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)  # dif here
     with open(hashes_filename_full, 'r') as fd:
         with open(vt_hashes_filename_full, 'w') as fd_out:
             for line in fd.readlines():
-                if _not_present_in_vt not in line: #dif here
+                if _not_present_in_vt not in line:  # dif here
                     continue
                 params = {'apikey': _vt_api_key, 'resource': rtrunc_at(line, ' | ')}
                 response = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
@@ -127,16 +144,18 @@ def requery_report_on_hashes_from_vt(filename):
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
-                    last_part = ltrunc_at(line, ' | ', 2) #dif here
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              str(response_json['response_code']),
-                                                                              str(response_json['positives']),
-                                                                              str(response_json['total']),
-                                                                              last_part)
+                    last_part = ltrunc_at(line, ' | ', 2)  # dif here
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} {4:s} | {5:s}\n".format(rtrunc_at(line, ' | '),
+                                                                                    str(response_json['response_code']),
+                                                                                    str(response_json['positives']),
+                                                                                    str(response_json['total']),
+                                                                                    str(response_json['scan_date']),
+                                                                                    last_part)
                     fd_out.write(print_line)
                     print print_line
                 else:
-                    print_line = "{0:s} unexpected response code: {1:s}".format(line, str(response_json['response_code']))
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line,
+                                                                                str(response_json['response_code']))
                     fd_out.write(print_line)
                     print print_line
                 time.sleep(15)
@@ -159,17 +178,6 @@ def submit_files_to_virustotal():
             submit_file_to_virustotal(fn)
 
 
-def get_unknown_to_vt_hashes():
-    vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
-    vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
-    with open(vt_hashes_filename_full, 'r') as f:
-        with open(vt_unknown_hashes_filename_full, 'wb') as f_out:
-            for line in f.readlines():
-                if _not_present_in_vt not in line:
-                    continue
-                f_out.write(line)
-
-
 def submit_unknown_files_to_virustotal():
     vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
     with open(vt_unknown_hashes_filename_full, 'r') as f:
@@ -177,7 +185,66 @@ def submit_unknown_files_to_virustotal():
             submit_file_to_virustotal(ltrunc_at(line, ' | ', 3).rstrip('\n'))
 
 
-#def get_url_report_from_vt():
+def get_url_report_from_vt():
+    extracted_urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
+    vt_extracted_urls_filename_full = os.path.join(_out_path, _vt_extracted_urls_filename)
+    with open(extracted_urls_filename_full, 'r') as fd:
+        with open(vt_extracted_urls_filename_full, 'wb') as fd_out:
+            for line in fd.readlines():
+                params = {'apikey': _vt_api_key, 'resource': ltrunc_at(line, ' | ').rstrip('\n'), 'scan': 1}
+                response = requests.get('https://www.virustotal.com/vtapi/v2/url/report', params=params)
+
+                response_json = response.json()
+                if "queued" in response_json['verbose_msg']:
+                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print (print_line)
+                    fd_out.write(print_line)
+                elif "Scan finished" in response_json['verbose_msg']:
+                    print_line = "{0:s} | {1:s} {2:s} {3:s}  | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                               str(response_json['positives']),
+                                                                               str(response_json['total']),
+                                                                               str(response_json['scan_date']),
+                                                                               ltrunc_at(line, ' | '))
+                    fd_out.write(print_line)
+                    print print_line
+                else:
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line,
+                                                                                str(response_json['response_code']))
+                    fd_out.write(print_line)
+                    print print_line
+                time.sleep(15)
+
+
+# TODO see if make sense to refactor this func with similar
+def get_previously_unknown_url_report_from_vt():
+    get_unknown_to_vt(_vt_extracted_urls_filename, _vt_unknown_extracted_urls_filename)  # dif
+    vt_unknown_extracted_urls_filename_full = os.path.join(_out_path, _vt_unknown_extracted_urls_filename)  # dif
+    vt_resubmited_extracted_urls_filename_full = os.path.join(_out_path, _vt_resubmited_extracted_urls_filename)  # dif
+    with open(vt_unknown_extracted_urls_filename_full, 'r') as fd:
+        with open(vt_resubmited_extracted_urls_filename_full, 'wb') as fd_out:
+            for line in fd.readlines():
+                params = {'apikey': _vt_api_key, 'resource': ltrunc_at(line, ' | ', 2).rstrip('\n'), 'scan': 1}  # dif
+                response = requests.get('https://www.virustotal.com/vtapi/v2/url/report', params=params)
+
+                response_json = response.json()
+                if "queued" in response_json['verbose_msg']:
+                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print (print_line)
+                    fd_out.write(print_line)
+                elif "Scan finished" in response_json['verbose_msg']:
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                              str(response_json['positives']),
+                                                                              str(response_json['total']),
+                                                                              str(response_json['scan_date']),
+                                                                              ltrunc_at(line, ' | ', 2))  # dif
+                    fd_out.write(print_line)
+                    print print_line
+                else:
+                    print_line = "{0:s} unexpected response code: {1:s}".format(line,
+                                                                                str(response_json['response_code']))
+                    fd_out.write(print_line)
+                    print print_line
+                time.sleep(15)
 
 
 def main(argv):
@@ -191,9 +258,9 @@ def main(argv):
     if not os.path.exists(_attachments_path):
         os.makedirs(_attachments_path)
 
-    filename_resubmit_hashes = _vt_unknown_hashes_filename
     try:
-        opts, args = getopt.getopt(argv, "hpmufnr", ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes"])
+        opts, args = getopt.getopt(argv, "hpmufnrq",
+                                   ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes"])
     except getopt.GetoptError:
         # TODO insert usage function
         print 'wrong usage'
@@ -212,8 +279,11 @@ def main(argv):
         elif opt in ("-n", "--unknownfiles"):
             submit_unknown_files_to_virustotal()
         elif opt in ("-r", "--remd5hashes"):
-            get_unknown_to_vt_hashes()
-            requery_report_on_hashes_from_vt(filename_resubmit_hashes)
+            requery_report_on_hashes_from_vt()
+        elif opt in ("-u", "--urls"):
+            get_url_report_from_vt()
+        elif opt == "-q":
+            get_previously_unknown_url_report_from_vt()
 
 
 if __name__ == "__main__":
