@@ -4,11 +4,38 @@
 #
 # The automation of parsing the.eml files.
 # It extracts attachments, urls and attachment hashes from all the emails in the current directory
-# to a pre-configured folder
+# to a pre-configured folder.
+# Furthermore, it is capable of automating all the submission, pulling the reports from virustotal.
 #
-import getopt
+# usage: eml_analysis [-h] [-p] [-hvt] [-uvt] [-sfvt] [-snfvt] [-rehvt] [-reuvt]
+#
+# Analyses all emails by parsing and checking against virustotal.
+#
+# optional arguments:
+#  -h, --help            show this help message and exit
+# -p, --parse           Parses all emails in current location and places all
+#                       extracted urls, attachments and their hashes in the
+#                       corresponding files under ./parsed_output dir.
+# -hvt, --hashestovt    Pulls reports from virustotal on all extracted file
+#                       hashes.
+# -uvt, --urlstovt      Pulls reports from virustotal on all extracted urls.
+#                       Scans are initiated automatically for all unknown
+#                       urls.
+# -sfvt, --scanfilesonvt
+#                       Submit (scan) all the extracted files to (via) virus
+#                       total.
+# -snfvt, --scanunknownfilesonvt
+#                       Submit (scan) the unknown extracted files to (via)
+#                       virus total.
+# -rehvt, --rehashestovt
+#                       Pulls reports from virustotal on all previously
+#                       unknown file hashes.
+# -reuvt, --reurlstovt  Pulls reports from virustotal on all previously
+#                       unknown extracted urls.
+#
+# Example of a quite full usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
+#
 import argparse
-import sys
 import time
 import requests
 import os
@@ -17,7 +44,7 @@ from eml_parser import eml_parser
 
 _vt_api_key = ''
 
-# where to save attachments to
+# Location to save attachments, hashes, urls and intermediate files
 _out_path = '/parsed_output'
 _attachments_path = '/parsed_output/attachments'
 _attachment_hashes_filename = 'attachments_hashes'
@@ -84,6 +111,7 @@ def parse():
 
 
 def query_report_on_hashes_from_vt():
+    print 'Pulling reports for all extracted hashes from virustotal:\n'
     hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
     vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
     with open(hashes_filename_full, 'r') as fd:
@@ -99,11 +127,11 @@ def query_report_on_hashes_from_vt():
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
                     print_line = "{0:s} | {1:s} {2:s} {3:s} {4:s} | {5:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              str(response_json['response_code']),
-                                                                              str(response_json['positives']),
-                                                                              str(response_json['total']),
-                                                                              str(response_json['scan_date']),
-                                                                              ltrunc_at(line, ' | '))
+                                                                                    str(response_json['response_code']),
+                                                                                    str(response_json['positives']),
+                                                                                    str(response_json['total']),
+                                                                                    str(response_json['scan_date']),
+                                                                                    ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -127,6 +155,7 @@ def get_unknown_to_vt(unsorted_filename, sorted_output_filename):
 
 # TODO see if make sense to refactor this func with similar
 def requery_report_on_hashes_from_vt():
+    print 'Pulling reports for previously unknown hashes from virustotal:\n'
     get_unknown_to_vt(_vt_hashes_filename, _vt_unknown_hashes_filename)  # dif here
     hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)  # dif here
     vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)  # dif here
@@ -173,19 +202,28 @@ def submit_file_to_virustotal(filename):
 
 
 def submit_files_to_virustotal():
+    print 'Submitting all files to virustotal:'
     for root, dirs, filenames in os.walk(_attachments_path):
         for fn in filenames:
             submit_file_to_virustotal(fn)
 
 
 def submit_unknown_files_to_virustotal():
+    print 'Submitting all unknown files to virustotal:\n'
     vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
-    with open(vt_unknown_hashes_filename_full, 'r') as f:
-        for line in f.readlines():
-            submit_file_to_virustotal(ltrunc_at(line, ' | ', 3).rstrip('\n'))
+    try:
+        with open(vt_unknown_hashes_filename_full, 'r') as f:
+            for line in f.readlines():
+                submit_file_to_virustotal(ltrunc_at(line, ' | ', 3).rstrip('\n'))
+    except IOError as er:
+        if er.errno == 2:
+            print 'There are no unknown to virustotal file. Nothing will be submitted.'
+        else:
+            print er
 
 
 def get_url_report_from_vt():
+    print 'Pulling url reports from virustotal:\n'
     extracted_urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
     vt_extracted_urls_filename_full = os.path.join(_out_path, _vt_extracted_urls_filename)
     with open(extracted_urls_filename_full, 'r') as fd:
@@ -217,6 +255,7 @@ def get_url_report_from_vt():
 
 # TODO see if make sense to refactor this func with similar
 def get_previously_unknown_url_report_from_vt():
+    print 'Pulling previously unknown url reports from virustotal:\n'
     get_unknown_to_vt(_vt_extracted_urls_filename, _vt_unknown_extracted_urls_filename)  # dif
     vt_unknown_extracted_urls_filename_full = os.path.join(_out_path, _vt_unknown_extracted_urls_filename)  # dif
     vt_resubmited_extracted_urls_filename_full = os.path.join(_out_path, _vt_resubmited_extracted_urls_filename)  # dif
@@ -247,7 +286,7 @@ def get_previously_unknown_url_report_from_vt():
                 time.sleep(15)
 
 
-def main(argv):
+def main():
     global _out_path
     global _attachments_path
     _out_path = os.getcwd() + _out_path
@@ -258,33 +297,41 @@ def main(argv):
     if not os.path.exists(_attachments_path):
         os.makedirs(_attachments_path)
 
-    try:
-        opts, args = getopt.getopt(argv, "hpmufnrq",
-                                   ["help", "parse", "md5hashes", "urls", "files", "unknownfiles", "remd5hashes"])
-    except getopt.GetoptError:
-        # TODO insert usage function
-        print 'wrong usage'
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt in ("-h", "--help"):
-            # TODO insert usage function
-            print 'TODO insert usage function'
-            sys.exit()
-        elif opt in ("-p", "--parse"):
-            parse()
-        elif opt in ("-m", "--md5hashes"):
-            query_report_on_hashes_from_vt()
-        elif opt in ("-f", "--files"):
-            submit_files_to_virustotal()
-        elif opt in ("-n", "--unknownfiles"):
-            submit_unknown_files_to_virustotal()
-        elif opt in ("-r", "--remd5hashes"):
-            requery_report_on_hashes_from_vt()
-        elif opt in ("-u", "--urls"):
-            get_url_report_from_vt()
-        elif opt == "-q":
-            get_previously_unknown_url_report_from_vt()
+    parser = argparse.ArgumentParser(prog='eml_analysis', description='Analyses all emails by parsing and checking '
+                                                                      'against virustotal.')
+    parser.add_argument('-p', '--parse', action="store_true", default=False,
+                        help="Parses all emails in current location and places all extracted urls, attachments and "
+                             "their hashes in the corresponding files under ./parsed_output dir.")
+    parser.add_argument('-hvt', '--hashestovt', action="store_true", default=False,
+                        help="Pulls reports from virustotal on all extracted file hashes.")
+    parser.add_argument('-uvt', '--urlstovt', action="store_true", default=False,
+                        help="Pulls reports from virustotal on all extracted urls. Scans are initiated automatically "
+                             "for all unknown urls.")
+    parser.add_argument('-sfvt', '--scanfilesonvt', action="store_true", default=False,
+                        help="Submit (scan) all the extracted files to (via) virus total.")
+    parser.add_argument('-snfvt', '--scanunknownfilesonvt', action="store_true", default=False,
+                        help="Submit (scan) the unknown extracted files to (via) virus total.")
+    parser.add_argument('-rehvt', '--rehashestovt', action="store_true", default=False,
+                        help="Pulls reports from virustotal on all previously unknown file hashes.")
+    parser.add_argument('-reuvt', '--reurlstovt', action="store_true", default=False,
+                        help="Pulls reports from virustotal on all previously unknown extracted urls.")
+
+    args = parser.parse_args()
+    if bool(args.parse):
+        parse()
+    if bool(args.hashestovt):
+        query_report_on_hashes_from_vt()
+    if bool(args.urlstovt):
+        get_url_report_from_vt()
+    if bool(args.scanfilesonvt):
+        submit_files_to_virustotal()
+    if bool(args.scanunknownfilesonvt):
+        submit_unknown_files_to_virustotal()
+    if bool(args.rehashestovt):
+        requery_report_on_hashes_from_vt()
+    if bool(args.reurlstovt):
+        get_previously_unknown_url_report_from_vt()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
