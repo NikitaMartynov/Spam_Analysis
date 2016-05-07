@@ -35,6 +35,7 @@
 #
 # Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
 #
+import sys
 import argparse
 import time
 import requests
@@ -42,7 +43,7 @@ import os
 import base64
 from eml_parser import eml_parser
 
-_vt_api_key = ''
+_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
 
 # Location to save attachments, hashes, urls and intermediate files
 _out_path = '/parsed_output'
@@ -77,6 +78,7 @@ def parse():
     open(urls_filename_full, 'wb').close()
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
+            eml_filename = unicode(eml_filename, "utf8").encode('utf8', 'replace')
             print 'Parsing: ', eml_filename
 
             eml_parsed = eml_parser.decode_email(eml_filename, include_attachment_data=True)
@@ -98,7 +100,7 @@ def parse():
                     # fetching hash
                     print '\tWriting hashes:', hashes_filename_full
                     with open(hashes_filename_full, 'a') as a_out2:
-                        a_out2.write("%s | %s | %s\n" % (a['hashes']['md5'], eml_filename, filename))
+                        a_out2.write("{0:s} | {1:s} | {2:s}\n".format(a['hashes']['md5'], eml_filename, filename))
 
             # fetching urls
             print '\tWriting urls:', urls_filename_full
@@ -106,7 +108,7 @@ def parse():
                 for url in eml_parsed['urls']:
                     # cut out trailer of the next line. Check if it is correct thing to do
                     url = url.split('\r\n')[0]
-                    a_out.write("%s | %s\n" % (eml_filename, url))
+                    a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
         print
 
 
@@ -126,12 +128,11 @@ def query_report_on_hashes_from_vt():
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} {4:s} | {5:s}\n".format(rtrunc_at(line, ' | '),
-                                                                                    str(response_json['response_code']),
-                                                                                    str(response_json['positives']),
-                                                                                    str(response_json['total']),
-                                                                                    str(response_json['scan_date']),
-                                                                                    ltrunc_at(line, ' | '))
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                              str(response_json['positives']),
+                                                                              str(response_json['total']),
+                                                                              str(response_json['scan_date']),
+                                                                              ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -174,12 +175,11 @@ def requery_report_on_hashes_from_vt():
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
                     last_part = ltrunc_at(line, ' | ', 2)  # dif here
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} {4:s} | {5:s}\n".format(rtrunc_at(line, ' | '),
-                                                                                    str(response_json['response_code']),
-                                                                                    str(response_json['positives']),
-                                                                                    str(response_json['total']),
-                                                                                    str(response_json['scan_date']),
-                                                                                    last_part)
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
+                                                                              str(response_json['positives']),
+                                                                              str(response_json['total']),
+                                                                              str(response_json['scan_date']),
+                                                                              last_part)
                     fd_out.write(print_line)
                     print print_line
                 else:
