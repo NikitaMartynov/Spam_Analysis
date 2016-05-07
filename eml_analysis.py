@@ -43,7 +43,7 @@ import os
 import base64
 from eml_parser import eml_parser
 
-_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
+_vt_api_key = ''
 
 # Location to save attachments, hashes, urls and intermediate files
 _out_path = '/parsed_output'
@@ -143,21 +143,9 @@ def query_report_on_hashes_from_vt():
                 time.sleep(15)
 
 
-def get_unknown_to_vt(unsorted_filename, sorted_output_filename):
-    vt_filename_full = os.path.join(_out_path, unsorted_filename)
-    vt_unknown_filename_full = os.path.join(_out_path, sorted_output_filename)
-    with open(vt_filename_full, 'r') as f:
-        with open(vt_unknown_filename_full, 'wb') as f_out:
-            for line in f.readlines():
-                if _not_present_in_vt not in line:
-                    continue
-                f_out.write(line)
-
-
 # TODO see if make sense to refactor this func with similar
 def requery_report_on_hashes_from_vt():
     print 'Pulling reports for previously unknown hashes from virustotal:\n'
-    get_unknown_to_vt(_vt_hashes_filename, _vt_unknown_hashes_filename)  # dif here
     hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)  # dif here
     vt_hashes_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)  # dif here
     with open(hashes_filename_full, 'r') as fd:
@@ -208,8 +196,20 @@ def submit_files_to_virustotal():
             submit_file_to_virustotal(fn)
 
 
+def get_unknown_to_vt(unsorted_filename, sorted_output_filename):
+    vt_filename_full = os.path.join(_out_path, unsorted_filename)
+    vt_unknown_filename_full = os.path.join(_out_path, sorted_output_filename)
+    with open(vt_filename_full, 'r') as f:
+        with open(vt_unknown_filename_full, 'wb') as f_out:
+            for line in f.readlines():
+                if _not_present_in_vt not in line:
+                    continue
+                f_out.write(line)
+
+
 def submit_unknown_files_to_virustotal():
     print 'Submitting all unknown files to virustotal:\n'
+    get_unknown_to_vt(_vt_hashes_filename, _vt_unknown_hashes_filename)
     vt_unknown_hashes_filename_full = os.path.join(_out_path, _vt_unknown_hashes_filename)
     try:
         with open(vt_unknown_hashes_filename_full, 'r') as f:
