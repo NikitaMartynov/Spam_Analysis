@@ -35,7 +35,6 @@
 #
 # Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
 #
-import sys
 import argparse
 import time
 import requests
@@ -43,16 +42,15 @@ import os
 import base64
 from eml_parser import eml_parser
 
-_vt_api_key = ''
+_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
 
 # Location to save attachments, hashes, urls and intermediate files
 _out_path = '/parsed_output'
 _attachments_path = '/parsed_output/attachments'
-_attachment_hashes_filename = 'attachments_hashes'
-_attachment_hashes_vt_filename = 'attachments_hashes_vt'
-_vt_hashes_filename = 'attachments_hashes_vt'
-_vt_unknown_hashes_filename = 'attachments_hashes_vt_unknown'
-_vt_resubmited_hashes_filename = 'attachments_hashes_vt_resubmited'
+_hashes_filename = 'attachment_hashes'
+_vt_hashes_filename = 'attachment_hashes_vt'
+_vt_unknown_hashes_filename = 'attachment_hashes_vt_unknown'
+_vt_resubmited_hashes_filename = 'attachment_hashes_vt_resubmited'
 _extracted_urls_filename = 'extracted_urls'
 _vt_extracted_urls_filename = 'extracted_urls_vt'
 _vt_unknown_extracted_urls_filename = 'extracted_urls_vt_unknown'
@@ -72,7 +70,7 @@ def ltrunc_at(s, d, n=1):
 
 
 def parse():
-    hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
+    hashes_filename_full = os.path.join(_out_path, _hashes_filename)
     urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
     open(hashes_filename_full, 'wb').close()
     open(urls_filename_full, 'wb').close()
@@ -114,7 +112,7 @@ def parse():
 
 def query_report_on_hashes_from_vt():
     print 'Pulling reports for all extracted hashes from virustotal:\n'
-    hashes_filename_full = os.path.join(_out_path, _attachment_hashes_filename)
+    hashes_filename_full = os.path.join(_out_path, _hashes_filename)
     vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
     with open(hashes_filename_full, 'r') as fd:
         with open(vt_hashes_filename_full, 'wb') as fd_out:
@@ -124,7 +122,8 @@ def query_report_on_hashes_from_vt():
 
                 response_json = response.json()
                 if response_json['response_code'] == 0:
-                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print_line = "{0:s} | {1:s} | {2:s}\n".format(rtrunc_at(line, ' | '), _not_present_in_vt,
+                                                                  ltrunc_at(line, ' | '))
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
@@ -158,7 +157,8 @@ def requery_report_on_hashes_from_vt():
 
                 response_json = response.json()
                 if response_json['response_code'] == 0:
-                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print_line = "{0:s} | {1:s} | {2:s}\n".format(rtrunc_at(line, ' | '), _not_present_in_vt,
+                                                                  ltrunc_at(line, ' | '))
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
@@ -234,7 +234,8 @@ def get_url_report_from_vt():
 
                 response_json = response.json()
                 if "queued" in response_json['verbose_msg']:
-                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print_line = "{0:s} | {1:s} | {2:s}\n".format(rtrunc_at(line, ' | '), _not_present_in_vt,
+                                                                  ltrunc_at(line, ' | '))
                     print (print_line)
                     fd_out.write(print_line)
                 elif "Scan finished" in response_json['verbose_msg']:
@@ -267,7 +268,8 @@ def get_previously_unknown_url_report_from_vt():
 
                 response_json = response.json()
                 if "queued" in response_json['verbose_msg']:
-                    print_line = "{0:s} | not present | {1:s}\n".format(rtrunc_at(line, ' | '), ltrunc_at(line, ' | '))
+                    print_line = "{0:s} | {1:s} | {2:s}\n".format(rtrunc_at(line, ' | '), _not_present_in_vt,
+                                                                  ltrunc_at(line, ' | '))
                     print (print_line)
                     fd_out.write(print_line)
                 elif "Scan finished" in response_json['verbose_msg']:
@@ -304,18 +306,23 @@ def main():
                         help="Parses all emails in current location and places all extracted urls, attachments and "
                              "their hashes in the corresponding files under ./parsed_output dir.")
     parser.add_argument('-hvt', '--hashestovt', action="store_true", default=False,
-                        help="Pulls reports from virustotal on all extracted file hashes.")
+                        help="Pulls reports from virustotal on all extracted file hashes. The reports are placed at "
+                             "./parsed_output/attachment_hashes_vt. Prerequisite: -p")
     parser.add_argument('-uvt', '--urlstovt', action="store_true", default=False,
                         help="Pulls reports from virustotal on all extracted urls. Scans are initiated automatically "
-                             "for all unknown urls.")
+                             "for all unknown urls. The reports are placed at ./parsed_output/extracted_urls_vt."
+                             "Prerequisite: -p")
     parser.add_argument('-sfvt', '--scanfilesonvt', action="store_true", default=False,
-                        help="Submit (scan) all the extracted files to (via) virus total.")
+                        help="Submit (scan) all the extracted files at ./parsed_output/attachments dir "
+                             "to (via) virus total.")
     parser.add_argument('-snfvt', '--scanunknownfilesonvt', action="store_true", default=False,
-                        help="Submit (scan) the unknown extracted files to (via) virus total.")
+                        help="Submit (scan) the unknown extracted files to (via) virus total. Prerequisite: -p, -hvt")
     parser.add_argument('-rehvt', '--rehashestovt', action="store_true", default=False,
-                        help="Pulls reports from virustotal on all previously unknown file hashes.")
+                        help="Pulls reports from virustotal on all previously unknown file hashes. The reports are "
+                             "placed at ./parsed_output/attachment_hashes_vt_resubmited. Prerequisite: -p, -hvt, -snfvt")
     parser.add_argument('-reuvt', '--reurlstovt', action="store_true", default=False,
-                        help="Pulls reports from virustotal on all previously unknown extracted urls.")
+                        help="Pulls reports from virustotal on all previously unknown extracted urls. The reports are "
+                             "placed at ./parsed_output/extracted_urls_vt_resubmited. Prerequisite: -p, -uvt")
 
     args = parser.parse_args()
     if bool(args.parse):
