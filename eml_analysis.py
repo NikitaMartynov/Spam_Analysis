@@ -42,7 +42,7 @@ import os
 import base64
 from eml_parser import eml_parser
 
-_vt_api_key = '5e16cd0891518a6fc36dbdf81bec50f26f4fa6c02666cd07af4d61f8d9b21d60'
+_vt_api_key = ''
 
 # Location to save attachments, hashes, urls and intermediate files
 _out_path = '/parsed_output'
@@ -104,8 +104,9 @@ def parse():
             print '\tWriting urls:', urls_filename_full
             with open(urls_filename_full, 'a') as a_out:
                 for url in eml_parsed['urls']:
-                    # cut out trailer of the next line. Check if it is correct thing to do
                     url = url.split('\r\n')[0]
+                    if url.count('>') - url.count('<'):
+                        url = url.rstrip('>')
                     a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
         print
 
