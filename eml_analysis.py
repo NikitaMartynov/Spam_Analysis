@@ -9,31 +9,45 @@
 #
 # usage: eml_analysis [-h] [-p] [-hvt] [-uvt] [-sfvt] [-snfvt] [-rehvt] [-reuvt]
 #
+#
+#
 # Analyses all emails by parsing and checking against virustotal.
 #
 # optional arguments:
-#  -h, --help            show this help message and exit
-# -p, --parse           Parses all emails in current location and places all
-#                       extracted urls, attachments and their hashes in the
-#                       corresponding files under ./parsed_output dir.
-# -hvt, --hashestovt    Pulls reports from virustotal on all extracted file
-#                       hashes.
-# -uvt, --urlstovt      Pulls reports from virustotal on all extracted urls.
-#                       Scans are initiated automatically for all unknown
-#                       urls.
-# -sfvt, --scanfilesonvt
-#                       Submit (scan) all the extracted files to (via) virus
-#                       total.
-# -snfvt, --scanunknownfilesonvt
-#                       Submit (scan) the unknown extracted files to (via)
-#                       virus total.
-# -rehvt, --rehashestovt
-#                       Pulls reports from virustotal on all previously
-#                       unknown file hashes.
-# -reuvt, --reurlstovt  Pulls reports from virustotal on all previously
-#                       unknown extracted urls.
+#   -h, --help            show this help message and exit
+#   -p, --parse           Parses all emails in current location and places all
+#                         extracted urls, attachments and their hashes in the
+#                         corresponding files under ./parsed_output dir.
+#   -hvt, --hashestovt    Pulls reports from virustotal on all extracted file
+#                         hashes. The reports are placed at
+#                         ./parsed_output/attachment_hashes_vt. Prerequisite: -p
+#   -uvt, --urlstovt      Pulls reports from virustotal on all extracted urls.
+#                         Scans are initiated automatically for all unknown
+#                         urls. The reports are placed at
+#                         ./parsed_output/extracted_urls_vt.Prerequisite: -p
+#   -sfvt, --scanfilesonvt
+#                         Submit (scan) all the extracted files at
+#                         ./parsed_output/attachments dir to (via) virus total.
+#   -snfvt, --scanunknownfilesonvt
+#                         Submit (scan) the unknown extracted files to (via)
+#                         virus total. Prerequisite: -p, -hvt
+#  -rehvt, --rehashestovt
+#                        Pulls reports from virustotal on all previously
+#                        unknown file hashes. The reports are placed at
+#                        ./parsed_output/attachment_hashes_vt_resubmited.
+#                        Prerequisite: -p, -hvt, -snfvt
+#  -reuvt, --reurlstovt  Pulls reports from virustotal on all previously
+#                        unknown extracted urls. The reports are placed at
+#                        ./parsed_output/extracted_urls_vt_resubmited.
+#                         Prerequisite: -p, -uvt
 #
-# Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt
+#
+# Example of usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -rehvt
+#
+#
+# IMPORTANT:
+# The script depends of the eml_parser module. In order to correct some url parsing heuristics mind the update in
+# eml_parser update definition of url_regex_simple by substituting [^ ] on [^\s].
 #
 import argparse
 import time
@@ -74,6 +88,10 @@ def parse():
     urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
     open(hashes_filename_full, 'wb').close()
     open(urls_filename_full, 'wb').close()
+
+    # parse any URLs found in the body
+    list_observed_urls = []
+
     for eml_filename in os.listdir('.'):
         if eml_filename.endswith('.eml'):
             eml_filename = unicode(eml_filename, "utf8").encode('utf8', 'replace')
@@ -106,8 +124,12 @@ def parse():
                 for url in eml_parsed['urls']:
                     url = url.split('\r\n')[0]
                     if url.count('>') - url.count('<'):
-                        url = url.rstrip('>')
-                    a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
+                        url = url.rsplit('>', 1)[0]
+                    if url.count(']') - url.count('['):
+                        url = url.rsplit(']', 1)[0]
+                    if url not in list_observed_urls:
+                        list_observed_urls.append(url)
+                        a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
         print
 
 
