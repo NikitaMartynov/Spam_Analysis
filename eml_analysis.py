@@ -40,7 +40,10 @@
 #                        unknown extracted urls. The reports are placed at
 #                        ./parsed_output/extracted_urls_vt_resubmited.
 #                         Prerequisite: -p, -uvt
-#
+#  -s, --summary         Draw a summary of the analysis, i.e. how many
+#                        malicious attributes were found. Summary is placed at
+#                        ./parsed_output/analysis_summary. Prerequisite: -p,
+#                        -hvt, -uvt, -snfvt, -reuvt, -rehvt
 #
 # Example of usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -rehvt
 #
@@ -55,6 +58,7 @@ import requests
 import os
 import base64
 from eml_parser import eml_parser
+from collections import namedtuple
 
 _vt_api_key = ''
 
@@ -69,6 +73,7 @@ _extracted_urls_filename = 'extracted_urls'
 _vt_extracted_urls_filename = 'extracted_urls_vt'
 _vt_unknown_extracted_urls_filename = 'extracted_urls_vt_unknown'
 _vt_resubmited_extracted_urls_filename = 'extracted_urls_vt_resubmited'
+_analysis_summary_filename = 'analysis_summary'
 
 _not_present_in_vt = "not present"
 
@@ -127,6 +132,7 @@ def parse():
                         url = url.rsplit('>', 1)[0]
                     if url.count(']') - url.count('['):
                         url = url.rsplit(']', 1)[0]
+
                     if url not in list_observed_urls:
                         list_observed_urls.append(url)
                         a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
@@ -292,7 +298,7 @@ def get_previously_unknown_url_report_from_vt():
                 response_json = response.json()
                 if "queued" in response_json['verbose_msg']:
                     print_line = "{0:s} | {1:s} | {2:s}\n".format(rtrunc_at(line, ' | '), _not_present_in_vt,
-                                                                  ltrunc_at(line, ' | '))
+                                                                  ltrunc_at(line, ' | ', 2))
                     print (print_line)
                     fd_out.write(print_line)
                 elif "Scan finished" in response_json['verbose_msg']:
@@ -309,6 +315,117 @@ def get_previously_unknown_url_report_from_vt():
                     fd_out.write(print_line)
                     print print_line
                 time.sleep(15)
+
+
+def draw_summary():
+    print 'Drawing summary of the analysis!\n'
+    vt_extracted_urls_filename_full = os.path.join(_out_path, _vt_extracted_urls_filename)
+    vt_resubmited_extracted_urls_filename_full = os.path.join(_out_path, _vt_resubmited_extracted_urls_filename)
+    vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
+    vt_resubmited_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
+
+    analysis_summary_filename_full = os.path.join(_out_path, _analysis_summary_filename)
+    with open(analysis_summary_filename_full, 'wb') as fd_out:
+        # named tuple to store results before writing to file
+        s_tuple = namedtuple('summary_tuple', 'Eml_name Mal_urls Total_urls Vt_rej_urls Mal_files Total_files')
+        s_list = []
+
+        # url summary calculation
+        # TODO consider implementing a check that previously unknown url count in initial extraction matches the resubmited total counter
+        prev_fname = ""
+        with open(vt_extracted_urls_filename_full, 'r') as fd:
+            for line in fd.readlines():
+                if line == '\n':
+                    continue
+                current_fname = rtrunc_at(line, ' | ')
+                if current_fname != prev_fname:
+                    s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                    prev_fname = current_fname
+
+                if _not_present_in_vt in line:
+                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+                    continue
+                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
+                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+                else:
+                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+
+        with open(vt_resubmited_extracted_urls_filename_full, 'r') as fd:
+            for line in fd.readlines():
+                if line == '\n':
+                    continue
+                current_fname = rtrunc_at(line, ' | ')
+
+                res = [item for item in s_list if item.Eml_name == current_fname]
+                if len(res) != 1 or res[0].Eml_name != current_fname:
+                    msg = 'ERROR: if observed, requires fixing!!!'
+                    print msg
+                    raise Exception(msg)
+
+                i = s_list.index(res[0])
+                if _not_present_in_vt in line:
+                    s_list[i] = s_list[i]._replace(Vt_rej_urls=s_list[i].Vt_rej_urls + 1)
+                    continue
+                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    s_list[i] = s_list[-1]._replace(Mal_urls=s_list[i].Mal_urls + 1)
+
+        # hashes summary calculation
+        with open(vt_hashes_filename_full, 'r') as fd:
+            for line in fd.readlines():
+                if line == '\n':
+                    continue
+                current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                res = [item for item in s_list if item.Eml_name == current_fname]
+                if len(res) > 1:
+                    msg = 'ERROR: if observed, requires fixing!!!'
+                    print msg
+                    raise Exception(msg)
+                if len(res) == 0:
+                    s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                    res.append(s_list[-1])
+                i = s_list.index(res[0])
+                if _not_present_in_vt in line:
+                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+                    continue
+                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+                else:
+                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+
+        with open(vt_resubmited_filename_full, 'r') as fd:
+            for line in fd.readlines():
+                if line == '\n':
+                    continue
+                current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                res = [item for item in s_list if item.Eml_name == current_fname]
+                if len(res) > 1:
+                    msg = 'ERROR: if observed, requires fixing!!!'
+                    print msg
+                    raise Exception(msg)
+                i = s_list.index(res[0])
+                if _not_present_in_vt in line:
+                    msg = 'ERROR: if observed, requires fixing!!!'
+                    print msg
+                    raise Exception(msg)
+                    continue
+                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+
+        # printing and writing to file
+        print_line = "Eml name | Mal urls | Total urls | VT rejected url | Mal files | Total files"
+        print (print_line)
+        fd_out.write(print_line + '\n')
+        for item in s_list:
+            print_line = "{0:s} | {1:s} | {2:s} | {3:s} | {4:s} | {5:s}".format(item.Eml_name,
+                                                                                str(item.Mal_urls),
+                                                                                str(item.Total_urls),
+                                                                                str(item.Vt_rej_urls),
+                                                                                str(item.Mal_files),
+                                                                                str(item.Total_files))
+            print (print_line)
+            fd_out.write(print_line + '\n')
 
 
 def main():
@@ -346,6 +463,10 @@ def main():
     parser.add_argument('-reuvt', '--reurlstovt', action="store_true", default=False,
                         help="Pulls reports from virustotal on all previously unknown extracted urls. The reports are "
                              "placed at ./parsed_output/extracted_urls_vt_resubmited. Prerequisite: -p, -uvt")
+    parser.add_argument('-s', '--summary', action="store_true", default=False,
+                        help="Draw a summary of the analysis, i.e. how many malicious attributes were found. Summary is "
+                             "placed at ./parsed_output/analysis_summary. Prerequisite: -p, -hvt, -uvt, -snfvt,  -reuvt,"
+                             " -rehvt")
 
     args = parser.parse_args()
     if bool(args.parse):
@@ -362,6 +483,8 @@ def main():
         requery_report_on_hashes_from_vt()
     if bool(args.reurlstovt):
         get_previously_unknown_url_report_from_vt()
+    if bool(args.summary):
+        draw_summary()
 
 
 if __name__ == "__main__":
