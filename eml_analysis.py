@@ -45,7 +45,7 @@
 #                        ./parsed_output/analysis_summary. Prerequisite: -p,
 #                        -hvt, -uvt, -snfvt, -reuvt, -rehvt
 #
-# Example of usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -rehvt
+# Example of usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -rehvt -s
 #
 #
 # IMPORTANT:
@@ -59,6 +59,8 @@ import os
 import base64
 from eml_parser import eml_parser
 from collections import namedtuple
+import email
+import re
 
 _vt_api_key = ''
 
@@ -126,17 +128,29 @@ def parse():
             # fetching urls
             print '\tWriting urls:', urls_filename_full
             with open(urls_filename_full, 'a') as a_out:
-                for url in eml_parsed['urls']:
-                    url = url.split('\r\n')[0]
-                    if url.count('>') - url.count('<'):
-                        url = url.rsplit('>', 1)[0]
-                    if url.count(']') - url.count('['):
-                        url = url.rsplit(']', 1)[0]
+                with open(eml_filename, 'r') as email_handle:
+                    msg = email.message_from_file(email_handle)
+                    for part in msg.walk():
+                        content_type = part.get_content_type()
+                        if content_type == 'multipart':
+                            continue
+                        if content_type in ('text/plain', 'text/html'):
+                            part_content = part.get_payload(decode=True)
+                            for link in re.findall(r'(https?://[^"<>\s]+)', part_content):
+                                if link not in list_observed_urls:
+                                    list_observed_urls.append(link)
+                    print 'Email urls:'
+                    for url in list_observed_urls:
+                        if url.count('>') - url.count('<'):
+                            url = url.rsplit('>', 1)[0]
+                        if url.count(']') - url.count('['):
+                            url = url.rsplit(']', 1)[0]
+                        if url.count(')') - url.count('('):
+                            url = url.rsplit(')', 1)[0]
 
-                    if url not in list_observed_urls:
-                        list_observed_urls.append(url)
+                        print url
                         a_out.write("{0:s} | {1:s}\n".format(eml_filename, url))
-        print
+            print
 
 
 def query_report_on_hashes_from_vt():
@@ -333,85 +347,97 @@ def draw_summary():
         # url summary calculation
         # TODO consider implementing a check that previously unknown url count in initial extraction matches the resubmited total counter
         prev_fname = ""
-        with open(vt_extracted_urls_filename_full, 'r') as fd:
-            for line in fd.readlines():
-                if line == '\n':
-                    continue
-                current_fname = rtrunc_at(line, ' | ')
-                if current_fname != prev_fname:
-                    s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
-                    prev_fname = current_fname
+        try:
+            with open(vt_extracted_urls_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = rtrunc_at(line, ' | ')
+                    if current_fname != prev_fname:
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        prev_fname = current_fname
 
-                if _not_present_in_vt in line:
-                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
-                    continue
-                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
-                    s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
-                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
-                else:
-                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+                    if _not_present_in_vt in line:
+                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+                        continue
+                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                        s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
+                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+                    else:
+                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+        except:
+            pass
 
-        with open(vt_resubmited_extracted_urls_filename_full, 'r') as fd:
-            for line in fd.readlines():
-                if line == '\n':
-                    continue
-                current_fname = rtrunc_at(line, ' | ')
+        try:
+            with open(vt_resubmited_extracted_urls_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = rtrunc_at(line, ' | ')
 
-                res = [item for item in s_list if item.Eml_name == current_fname]
-                if len(res) != 1 or res[0].Eml_name != current_fname:
-                    msg = 'ERROR: if observed, requires fixing!!!'
-                    print msg
-                    raise Exception(msg)
+                    res = [item for item in s_list if item.Eml_name == current_fname]
+                    if len(res) != 1 or res[0].Eml_name != current_fname:
+                        msg = 'ERROR: if observed, requires fixing!!!'
+                        print msg
+                        raise Exception(msg)
 
-                i = s_list.index(res[0])
-                if _not_present_in_vt in line:
-                    s_list[i] = s_list[i]._replace(Vt_rej_urls=s_list[i].Vt_rej_urls + 1)
-                    continue
-                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
-                    s_list[i] = s_list[-1]._replace(Mal_urls=s_list[i].Mal_urls + 1)
+                    i = s_list.index(res[0])
+                    if _not_present_in_vt in line:
+                        s_list[i] = s_list[i]._replace(Vt_rej_urls=s_list[i].Vt_rej_urls + 1)
+                        continue
+                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                        s_list[i] = s_list[-1]._replace(Mal_urls=s_list[i].Mal_urls + 1)
+        except:
+            pass
 
         # hashes summary calculation
-        with open(vt_hashes_filename_full, 'r') as fd:
-            for line in fd.readlines():
-                if line == '\n':
-                    continue
-                current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
-                res = [item for item in s_list if item.Eml_name == current_fname]
-                if len(res) > 1:
-                    msg = 'ERROR: if observed, requires fixing!!!'
-                    print msg
-                    raise Exception(msg)
-                if len(res) == 0:
-                    s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
-                    res.append(s_list[-1])
-                i = s_list.index(res[0])
-                if _not_present_in_vt in line:
-                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
-                    continue
-                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
-                    s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
-                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
-                else:
-                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+        try:
+            with open(vt_hashes_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                    res = [item for item in s_list if item.Eml_name == current_fname]
+                    if len(res) > 1:
+                        msg = 'ERROR: if observed, requires fixing!!!'
+                        print msg
+                        raise Exception(msg)
+                    if len(res) == 0:
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        res.append(s_list[-1])
+                    i = s_list.index(res[0])
+                    if _not_present_in_vt in line:
+                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+                        continue
+                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                        s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+                    else:
+                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+        except:
+            pass
 
-        with open(vt_resubmited_filename_full, 'r') as fd:
-            for line in fd.readlines():
-                if line == '\n':
-                    continue
-                current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
-                res = [item for item in s_list if item.Eml_name == current_fname]
-                if len(res) > 1:
-                    msg = 'ERROR: if observed, requires fixing!!!'
-                    print msg
-                    raise Exception(msg)
-                i = s_list.index(res[0])
-                if _not_present_in_vt in line:
-                    msg = 'ERROR: if observed, requires fixing!!!'
-                    print msg
-                    raise Exception(msg)
-                    continue
-                if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
-                    s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+        try:
+            with open(vt_resubmited_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                    res = [item for item in s_list if item.Eml_name == current_fname]
+                    if len(res) > 1:
+                        msg = 'ERROR: if observed, requires fixing!!!'
+                        print msg
+                        raise Exception(msg)
+                    i = s_list.index(res[0])
+                    if _not_present_in_vt in line:
+                        msg = 'ERROR: if observed, requires fixing!!!'
+                        print msg
+                        raise Exception(msg)
+                        continue
+                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                        s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+        except:
+            pass
 
         # printing and writing to file
         print_line = "Eml name | Mal urls | Total urls | VT rejected url | Mal files | Total files"
