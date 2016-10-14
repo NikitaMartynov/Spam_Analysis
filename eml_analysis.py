@@ -341,8 +341,10 @@ def display_as_table(file_name_full):
 
 def draw_summary():
     print 'Drawing summary of the analysis!\n'
+    extracted_urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
     vt_extracted_urls_filename_full = os.path.join(_out_path, _vt_extracted_urls_filename)
     vt_resubmited_extracted_urls_filename_full = os.path.join(_out_path, _vt_resubmited_extracted_urls_filename)
+    hashes_filename_full = os.path.join(_out_path, _hashes_filename)
     vt_hashes_filename_full = os.path.join(_out_path, _vt_hashes_filename)
     vt_resubmited_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
 
@@ -355,6 +357,21 @@ def draw_summary():
         # url summary calculation
         # TODO consider implementing a check that previously unknown url count in initial extraction matches the resubmited total counter
         prev_fname = ""
+
+        try:
+            with open(extracted_urls_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = rtrunc_at(line, ' | ')
+                    if current_fname != prev_fname:
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        prev_fname = current_fname
+
+                    s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+        except:
+            pass
+
         try:
             with open(vt_extracted_urls_filename_full, 'r') as fd:
                 for line in fd.readlines():
@@ -366,13 +383,9 @@ def draw_summary():
                         prev_fname = current_fname
 
                     if _not_present_in_vt in line:
-                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
                         continue
                     if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
                         s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
-                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
-                    else:
-                        s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
         except:
             pass
 
@@ -400,6 +413,25 @@ def draw_summary():
 
         # hashes summary calculation
         try:
+            with open(hashes_filename_full, 'r') as fd:
+                for line in fd.readlines():
+                    if line == '\n':
+                        continue
+                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ', 1)
+                    res = [item for item in s_list if item.Eml_name == current_fname]
+                    if len(res) > 1:
+                        msg = 'ERROR: if observed, requires fixing!!!'
+                        print msg
+                        raise Exception(msg)
+                    if len(res) == 0:
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        res.append(s_list[-1])
+                    i = s_list.index(res[0])
+                    s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+        except:
+            pass
+
+        try:
             with open(vt_hashes_filename_full, 'r') as fd:
                 for line in fd.readlines():
                     if line == '\n':
@@ -415,13 +447,9 @@ def draw_summary():
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
-                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
                         continue
                     if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
-                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
-                    else:
-                        s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
         except:
             pass
 
