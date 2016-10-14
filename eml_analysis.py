@@ -53,12 +53,15 @@
 # eml_parser update definition of url_regex_simple by substituting [^ ] on [^\s].
 #
 import argparse
+import codecs
 import time
 import requests
 import os
 import base64
 from eml_parser import eml_parser
 from collections import namedtuple
+from prettytable import from_csv
+
 import email
 import re
 
@@ -331,6 +334,12 @@ def get_previously_unknown_url_report_from_vt():
                 time.sleep(15)
 
 
+def display_as_table(file_name_full):
+    with open(file_name_full, 'rb') as fd:
+        sum_table = from_csv(fd)
+        print sum_table
+
+
 def draw_summary():
     print 'Drawing summary of the analysis!\n'
     vt_extracted_urls_filename_full = os.path.join(_out_path, _vt_extracted_urls_filename)
@@ -339,7 +348,7 @@ def draw_summary():
     vt_resubmited_filename_full = os.path.join(_out_path, _vt_resubmited_hashes_filename)
 
     analysis_summary_filename_full = os.path.join(_out_path, _analysis_summary_filename)
-    with open(analysis_summary_filename_full, 'wb') as fd_out:
+    with codecs.open(analysis_summary_filename_full, 'wb', 'utf-8') as fd_out:
         # named tuple to store results before writing to file
         s_tuple = namedtuple('summary_tuple', 'Eml_name Mal_urls Total_urls Vt_rej_urls Mal_files Total_files')
         s_list = []
@@ -441,17 +450,16 @@ def draw_summary():
 
         # printing and writing to file
         print_line = "Eml name | Mal urls | Total urls | VT rejected url | Mal files | Total files"
-        print (print_line)
         fd_out.write(print_line + '\n')
         for item in s_list:
-            print_line = "{0:s} | {1:s} | {2:s} | {3:s} | {4:s} | {5:s}".format(item.Eml_name,
+             print_line = "{0:s} | {1:s} | {2:s} | {3:s} | {4:s} | {5:s}".format(item.Eml_name,
                                                                                 str(item.Mal_urls),
                                                                                 str(item.Total_urls),
                                                                                 str(item.Vt_rej_urls),
                                                                                 str(item.Mal_files),
                                                                                 str(item.Total_files))
-            print (print_line)
-            fd_out.write(print_line + '\n')
+             fd_out.write(print_line + '\n')
+    display_as_table(analysis_summary_filename_full)
 
 
 def main():
@@ -467,7 +475,7 @@ def main():
 
     parser = argparse.ArgumentParser(prog='eml_analysis', description='Analyses all emails by parsing and checking '
                                                                       'against virustotal.',
-                                     epilog='Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt')
+                                     epilog='Example of usage: eml_analysis.py -p -hvt  -uvt -snfvt  -reuvt -rehvt -s')
     parser.add_argument('-p', '--parse', action="store_true", default=False,
                         help="Parses all emails in current location and places all extracted urls, attachments and "
                              "their hashes in the corresponding files under ./parsed_output dir.")
