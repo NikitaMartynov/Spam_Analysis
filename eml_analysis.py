@@ -100,9 +100,8 @@ def parse():
     open(urls_filename_full, 'wb').close()
 
     # parse any URLs found in the body
-    list_observed_urls = []
-
     for eml_filename in os.listdir('.'):
+        list_observed_urls = []
         if eml_filename.endswith('.eml'):
             eml_filename = unicode(eml_filename, "utf8").encode('utf8', 'replace')
             print 'Parsing: ', eml_filename
