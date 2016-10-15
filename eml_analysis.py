@@ -172,11 +172,13 @@ def query_report_on_hashes_from_vt():
                     print (print_line)
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              str(response_json['positives']),
-                                                                              str(response_json['total']),
-                                                                              str(response_json['scan_date']),
-                                                                              ltrunc_at(line, ' | '))
+                    vendors_detected = get_vendors_detected(response_json)
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s} | {5:s}".format(rtrunc_at(line, ' | '),
+                                                                                    str(response_json['positives']),
+                                                                                    str(response_json['total']),
+                                                                                    str(response_json['scan_date']),
+                                                                                    vendors_detected,
+                                                                                    ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -208,11 +210,13 @@ def requery_report_on_hashes_from_vt():
                     fd_out.write(print_line)
                 elif response_json['response_code'] == 1:
                     last_part = ltrunc_at(line, ' | ', 2)  # dif here
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              str(response_json['positives']),
-                                                                              str(response_json['total']),
-                                                                              str(response_json['scan_date']),
-                                                                              last_part)
+                    detected_vendors = get_vendors_detected(response_json)
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s} | {5:s}".format(rtrunc_at(line, ' | '),
+                                                                                    str(response_json['positives']),
+                                                                                    str(response_json['total']),
+                                                                                    str(response_json['scan_date']),
+                                                                                    detected_vendors,
+                                                                                    last_part)
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -267,6 +271,14 @@ def submit_unknown_files_to_virustotal():
             print er
 
 
+def get_vendors_detected(response_json):
+    detected_vendors = ''
+    for vendor in response_json['scans']:
+        if response_json['scans'][vendor]['detected'] == True:
+            detected_vendors += vendor + ' '
+    return detected_vendors.rstrip(' ')
+
+
 def get_url_report_from_vt():
     print 'Pulling url reports from virustotal:\n'
     extracted_urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
@@ -284,11 +296,13 @@ def get_url_report_from_vt():
                     print (print_line)
                     fd_out.write(print_line)
                 elif "Scan finished" in response_json['verbose_msg']:
-                    print_line = "{0:s} | {1:s} {2:s} {3:s}  | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                               str(response_json['positives']),
-                                                                               str(response_json['total']),
-                                                                               str(response_json['scan_date']),
-                                                                               ltrunc_at(line, ' | '))
+                    detected_vendors = get_vendors_detected(response_json)
+                    print_line = "{0:s} | {1:s} {2:s} {3:s}  | {4:s} | {5:s}".format(rtrunc_at(line, ' | '),
+                                                                                     str(response_json['positives']),
+                                                                                     str(response_json['total']),
+                                                                                     str(response_json['scan_date']),
+                                                                                     detected_vendors,
+                                                                                     ltrunc_at(line, ' | '))
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -318,11 +332,13 @@ def get_previously_unknown_url_report_from_vt():
                     print (print_line)
                     fd_out.write(print_line)
                 elif "Scan finished" in response_json['verbose_msg']:
-                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s}\n".format(rtrunc_at(line, ' | '),
-                                                                              str(response_json['positives']),
-                                                                              str(response_json['total']),
-                                                                              str(response_json['scan_date']),
-                                                                              ltrunc_at(line, ' | ', 2))  # dif
+                    detected_vendors = get_vendors_detected(response_json)
+                    print_line = "{0:s} | {1:s} {2:s} {3:s} | {4:s} | {5:s}".format(rtrunc_at(line, ' | '),
+                                                                                    str(response_json['positives']),
+                                                                                    str(response_json['total']),
+                                                                                    str(response_json['scan_date']),
+                                                                                    detected_vendors,
+                                                                                    ltrunc_at(line, ' | ', 2))  # dif
                     fd_out.write(print_line)
                     print print_line
                 else:
@@ -343,8 +359,13 @@ def alert_error(err):
     print err
     raise Exception(err)
 
-def get_av_hit_count(str):
-    return ltrunc_at(rtrunc_at(str, ' | ', 2), ' | ').split(' ')[0]
+
+def get_av_hit_count(st):
+    return ltrunc_at(rtrunc_at(st, ' | ', 2), ' | ').split(' ')[0]
+
+
+def get_av_detected(st):
+    return ltrunc_at(rtrunc_at(st, ' | ', 3), ' | ', 2)
 
 
 def draw_summary():
@@ -360,7 +381,7 @@ def draw_summary():
     with codecs.open(analysis_summary_filename_full, 'wb', 'utf-8') as fd_out:
         # named tuple to store results before writing to file
         s_tuple = namedtuple('summary_tuple',
-                             'Eml_name Mal_urls MaxU_hit Total_urls Vt_rej_urls Mal_files MaxF_hit Total_files')
+                             'Eml_name Mal_urls Total_urls Vt_rej_urls Mal_files  Total_files MaxU_hit MaxF_hit UrlDet FileDet')
         s_list = []
 
         # url summary calculation
@@ -374,7 +395,7 @@ def draw_summary():
                         continue
                     current_fname = rtrunc_at(line, ' | ')
                     if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         prev_fname = current_fname
 
                     s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
@@ -388,7 +409,7 @@ def draw_summary():
                         continue
                     current_fname = rtrunc_at(line, ' | ')
                     if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         prev_fname = current_fname
 
                     if _not_present_in_vt in line:
@@ -398,6 +419,8 @@ def draw_summary():
                         s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
                         if s_list[-1].MaxU_hit < vt_av_hit_count:
                             s_list[-1] = s_list[-1]._replace(MaxU_hit=vt_av_hit_count)
+                            s_list[-1] = s_list[-1]._replace(UrlDet=get_av_detected(line))
+
         except:
             pass
 
@@ -420,6 +443,7 @@ def draw_summary():
                         s_list[i] = s_list[i]._replace(Mal_urls=s_list[i].Mal_urls + 1)
                         if s_list[i].MaxU_hit < vt_av_hit_count:
                             s_list[i] = s_list[i]._replace(MaxU_hit=vt_av_hit_count)
+                            s_list[i] = s_list[i]._replace(UrlDet=get_av_detected(line))
         except:
             pass
 
@@ -434,7 +458,7 @@ def draw_summary():
                     if len(res) > 1:
                         alert_error('ERROR: if observed, requires fixing!!!')
                     if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
@@ -446,12 +470,12 @@ def draw_summary():
                 for line in fd.readlines():
                     if line == '\n':
                         continue
-                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 4), ' | ', 3)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
                         alert_error('ERROR: if observed, requires fixing!!!')
                     if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
@@ -461,6 +485,7 @@ def draw_summary():
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
                         if s_list[i].MaxF_hit < vt_av_hit_count:
                             s_list[i] = s_list[i]._replace(MaxF_hit=vt_av_hit_count)
+                            s_list[i] = s_list[i]._replace(FileDet=get_av_detected(line))
         except:
             pass
 
@@ -469,7 +494,7 @@ def draw_summary():
                 for line in fd.readlines():
                     if line == '\n':
                         continue
-                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
+                    current_fname = ltrunc_at(rtrunc_at(line, ' | ', 4), ' | ', 3)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
                         alert_error('ERROR: if observed, requires fixing!!!')
@@ -482,21 +507,25 @@ def draw_summary():
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
                         if s_list[i].MaxF_hit < vt_av_hit_count:
                             s_list[i] = s_list[i]._replace(MaxF_hit=vt_av_hit_count)
+                            s_list[i] = s_list[i]._replace(FileDet=get_av_detected(line))
         except:
             pass
 
         # printing and writing to file
-        print_line = "EmlName MalUrls MaxUrlHit TotalUrls VTrej MalFiles MaxFileHit TotalFiles"
+        print_line = "EmlName, MalUrls, TotalUrls, VTrej, MalFiles, TotalFiles, MaxUrlHit, MaxFileHit, UrlDet, FileDet"
         fd_out.write(print_line + '\n')
         for item in s_list:
-            print_line = "{0:s} {1:s} {2:s} {3:s} {4:s} {5:s} {6:s} {7:s}".format(item.Eml_name,
-                                                                                  str(item.Mal_urls),
-                                                                                  str(item.MaxU_hit),
-                                                                                  str(item.Total_urls),
-                                                                                  str(item.Vt_rej_urls),
-                                                                                  str(item.Mal_files),
-                                                                                  str(item.MaxF_hit),
-                                                                                  str(item.Total_files))
+            print_line = "{0:s}, {1:s}, {2:s}, {3:s}, {4:s}, " \
+                         "{5:s}, {6:s}, {7:s}, {8:s}, {9:s}".format(item.Eml_name,
+                                                                    str(item.Mal_urls),
+                                                                    str(item.Total_urls),
+                                                                    str(item.Vt_rej_urls),
+                                                                    str(item.Mal_files),
+                                                                    str(item.Total_files),
+                                                                    str(item.MaxU_hit),
+                                                                    str(item.MaxF_hit),
+                                                                    str(item.UrlDet),
+                                                                    str(item.FileDet))
             fd_out.write(print_line + '\n')
     display_as_table(analysis_summary_filename_full)
 
