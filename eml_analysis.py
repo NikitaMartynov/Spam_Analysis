@@ -339,6 +339,14 @@ def display_as_table(file_name_full):
         print sum_table
 
 
+def alert_error(err):
+    print err
+    raise Exception(err)
+
+def get_av_hit_count(str):
+    return ltrunc_at(rtrunc_at(str, ' | ', 2), ' | ').split(' ')[0]
+
+
 def draw_summary():
     print 'Drawing summary of the analysis!\n'
     extracted_urls_filename_full = os.path.join(_out_path, _extracted_urls_filename)
@@ -351,7 +359,8 @@ def draw_summary():
     analysis_summary_filename_full = os.path.join(_out_path, _analysis_summary_filename)
     with codecs.open(analysis_summary_filename_full, 'wb', 'utf-8') as fd_out:
         # named tuple to store results before writing to file
-        s_tuple = namedtuple('summary_tuple', 'Eml_name Mal_urls Total_urls Vt_rej_urls Mal_files Total_files')
+        s_tuple = namedtuple('summary_tuple',
+                             'Eml_name Mal_urls MaxU_hit Total_urls Vt_rej_urls Mal_files MaxF_hit Total_files')
         s_list = []
 
         # url summary calculation
@@ -365,7 +374,7 @@ def draw_summary():
                         continue
                     current_fname = rtrunc_at(line, ' | ')
                     if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
                         prev_fname = current_fname
 
                     s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
@@ -379,13 +388,16 @@ def draw_summary():
                         continue
                     current_fname = rtrunc_at(line, ' | ')
                     if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
                         prev_fname = current_fname
 
                     if _not_present_in_vt in line:
                         continue
-                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    vt_av_hit_count = get_av_hit_count(line)
+                    if vt_av_hit_count != '0':
                         s_list[-1] = s_list[-1]._replace(Mal_urls=s_list[-1].Mal_urls + 1)
+                        if s_list[-1].MaxU_hit < vt_av_hit_count:
+                            s_list[-1] = s_list[-1]._replace(MaxU_hit=vt_av_hit_count)
         except:
             pass
 
@@ -398,16 +410,16 @@ def draw_summary():
 
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) != 1 or res[0].Eml_name != current_fname:
-                        msg = 'ERROR: if observed, requires fixing!!!'
-                        print msg
-                        raise Exception(msg)
-
+                        alert_error('ERROR: if observed, requires fixing!!!')
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
                         s_list[i] = s_list[i]._replace(Vt_rej_urls=s_list[i].Vt_rej_urls + 1)
                         continue
-                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
-                        s_list[i] = s_list[-1]._replace(Mal_urls=s_list[i].Mal_urls + 1)
+                    vt_av_hit_count = get_av_hit_count(line)
+                    if vt_av_hit_count != '0':
+                        s_list[i] = s_list[i]._replace(Mal_urls=s_list[i].Mal_urls + 1)
+                        if s_list[i].MaxU_hit < vt_av_hit_count:
+                            s_list[i] = s_list[i]._replace(MaxU_hit=vt_av_hit_count)
         except:
             pass
 
@@ -420,11 +432,9 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ', 1)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        msg = 'ERROR: if observed, requires fixing!!!'
-                        print msg
-                        raise Exception(msg)
+                        alert_error('ERROR: if observed, requires fixing!!!')
                     if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
@@ -439,17 +449,18 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        msg = 'ERROR: if observed, requires fixing!!!'
-                        print msg
-                        raise Exception(msg)
+                        alert_error('ERROR: if observed, requires fixing!!!')
                     if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0))
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
                         continue
-                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    vt_av_hit_count = get_av_hit_count(line)
+                    if vt_av_hit_count != '0':
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+                        if s_list[i].MaxF_hit < vt_av_hit_count:
+                            s_list[i] = s_list[i]._replace(MaxF_hit=vt_av_hit_count)
         except:
             pass
 
@@ -461,31 +472,32 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 3), ' | ', 2)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        msg = 'ERROR: if observed, requires fixing!!!'
-                        print msg
-                        raise Exception(msg)
+                        alert_error('ERROR: if observed, requires fixing!!!')
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
-                        msg = 'ERROR: if observed, requires fixing!!!'
-                        print msg
-                        raise Exception(msg)
+                        alert_error('ERROR: if observed, requires fixing!!!')
                         continue
-                    if ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ').split(' ')[0] != '0':
+                    vt_av_hit_count = get_av_hit_count(line)
+                    if vt_av_hit_count != '0':
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
+                        if s_list[i].MaxF_hit < vt_av_hit_count:
+                            s_list[i] = s_list[i]._replace(MaxF_hit=vt_av_hit_count)
         except:
             pass
 
         # printing and writing to file
-        print_line = "Eml name | Mal urls | Total urls | VT rejected url | Mal files | Total files"
+        print_line = "EmlName MalUrls MaxUrlHit TotalUrls VTrej MalFiles MaxFileHit TotalFiles"
         fd_out.write(print_line + '\n')
         for item in s_list:
-             print_line = "{0:s} | {1:s} | {2:s} | {3:s} | {4:s} | {5:s}".format(item.Eml_name,
-                                                                                str(item.Mal_urls),
-                                                                                str(item.Total_urls),
-                                                                                str(item.Vt_rej_urls),
-                                                                                str(item.Mal_files),
-                                                                                str(item.Total_files))
-             fd_out.write(print_line + '\n')
+            print_line = "{0:s} {1:s} {2:s} {3:s} {4:s} {5:s} {6:s} {7:s}".format(item.Eml_name,
+                                                                                  str(item.Mal_urls),
+                                                                                  str(item.MaxU_hit),
+                                                                                  str(item.Total_urls),
+                                                                                  str(item.Vt_rej_urls),
+                                                                                  str(item.Mal_files),
+                                                                                  str(item.MaxF_hit),
+                                                                                  str(item.Total_files))
+            fd_out.write(print_line + '\n')
     display_as_table(analysis_summary_filename_full)
 
 
