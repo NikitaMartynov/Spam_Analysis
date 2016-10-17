@@ -117,6 +117,7 @@ def parse():
                     else:
                         filename = a['filename']
 
+                    filename = eml_filename + ' | ' + filename
                     filename_path = os.path.join(_attachments_path, filename)
 
                     print '\tWriting attachment:', filename_path
@@ -126,7 +127,7 @@ def parse():
                     # fetching hash
                     print '\tWriting hashes:', hashes_filename_full
                     with open(hashes_filename_full, 'a') as a_out2:
-                        a_out2.write("{0:s} | {1:s} | {2:s}\n".format(a['hashes']['md5'], eml_filename, filename))
+                        a_out2.write("{0:s} | {1:s}\n".format(a['hashes']['md5'], filename))
 
             # fetching urls
             print '\tWriting urls:', urls_filename_full
