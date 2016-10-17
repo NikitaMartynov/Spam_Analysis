@@ -79,6 +79,7 @@ _vt_extracted_urls_filename = 'extracted_urls_vt'
 _vt_unknown_extracted_urls_filename = 'extracted_urls_vt_unknown'
 _vt_resubmited_extracted_urls_filename = 'extracted_urls_vt_resubmited'
 _analysis_summary_filename = 'analysis_summary'
+_input_path = '.'
 
 _not_present_in_vt = "not present"
 
@@ -100,7 +101,7 @@ def parse():
     open(urls_filename_full, 'wb').close()
 
     # parse any URLs found in the body
-    for eml_filename in os.listdir('.'):
+    for eml_filename in os.listdir(_input_path):
         list_observed_urls = []
         if eml_filename.endswith('.eml'):
             eml_filename = unicode(eml_filename, "utf8").encode('utf8', 'replace')
@@ -407,11 +408,6 @@ def draw_summary():
                 for line in fd.readlines():
                     if line == '\n':
                         continue
-                    current_fname = rtrunc_at(line, ' | ')
-                    if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
-                        prev_fname = current_fname
-
                     if _not_present_in_vt in line:
                         continue
                     vt_av_hit_count = get_av_hit_count(line)
@@ -433,7 +429,7 @@ def draw_summary():
 
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) != 1 or res[0].Eml_name != current_fname:
-                        alert_error('ERROR: if observed, requires fixing!!!')
+                        alert_error('ERROR at vt_resubmited_extracted_urls: if observed, requires fixing!!!')
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
                         s_list[i] = s_list[i]._replace(Vt_rej_urls=s_list[i].Vt_rej_urls + 1)
@@ -456,7 +452,7 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 2), ' | ', 1)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        alert_error('ERROR: if observed, requires fixing!!!')
+                        alert_error('ERROR at hashes_filename: if observed, requires fixing!!!')
                     if len(res) == 0:
                         s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         res.append(s_list[-1])
@@ -470,16 +466,13 @@ def draw_summary():
                 for line in fd.readlines():
                     if line == '\n':
                         continue
+                    if _not_present_in_vt in line:
+                        continue
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 4), ' | ', 3)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        alert_error('ERROR: if observed, requires fixing!!!')
-                    if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
-                        res.append(s_list[-1])
+                        alert_error('ERROR at vt_hashes: if observed, requires fixing!!!')
                     i = s_list.index(res[0])
-                    if _not_present_in_vt in line:
-                        continue
                     vt_av_hit_count = get_av_hit_count(line)
                     if vt_av_hit_count != '0':
                         s_list[i] = s_list[i]._replace(Mal_files=s_list[i].Mal_files + 1)
@@ -497,10 +490,10 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 4), ' | ', 3)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        alert_error('ERROR: if observed, requires fixing!!!')
+                        alert_error('ERROR1 at vt_resubmited: if observed, requires fixing!!!')
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
-                        alert_error('ERROR: if observed, requires fixing!!!')
+                        alert_error('ERROR2 at vt_resubmited: if observed, requires fixing!!!')
                         continue
                     vt_av_hit_count = get_av_hit_count(line)
                     if vt_av_hit_count != '0':
