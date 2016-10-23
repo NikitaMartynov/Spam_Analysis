@@ -84,7 +84,9 @@ _input_path = '.'
 _not_present_in_vt = "not present"
 
 # Url used to sadbox suspicious URLs at the email gateway. Set to None if no sandboxing at the gateway happens
-_urls_sandboxed_by_vendor = "http://secure-web.cisco.com"
+_urls_sandboxed_by_gateway = "http://secure-web.cisco.com"
+# if an attachment is dropped by email gateway it will put certain text in the text file. Set to None if do not want to use
+_attachment_dropped_by_gateway = "filter rule on the host <esa"
 
 
 def rtrunc_at(s, d, n=1):
@@ -386,7 +388,7 @@ def draw_summary():
     with codecs.open(analysis_summary_filename_full, 'wb', 'utf-8') as fd_out:
         # named tuple to store results before writing to file
         s_tuple = namedtuple('summary_tuple',
-                             'Eml_name Total_urls Mal_urls  SandBoxed_urls Mal_files  Total_files MaxU_hit MaxF_hit UrlDet FileDet')
+                             'Eml_name Total_urls Mal_urls SandBoxed_urls Total_files Mal_files Dropped_files MaxU_hit MaxF_hit UrlDet FileDet')
         s_list = []
 
         # url summary calculation
@@ -400,13 +402,13 @@ def draw_summary():
                         continue
                     current_fname = rtrunc_at(line, ' | ')
                     if current_fname != prev_fname:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         prev_fname = current_fname
                     s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
 
-                    if _urls_sandboxed_by_vendor is not None:
+                    if _urls_sandboxed_by_gateway is not None:
                         url = ltrunc_at(line, ' | ')
-                        if url.startswith(_urls_sandboxed_by_vendor):
+                        if url.startswith(_urls_sandboxed_by_gateway):
                             s_list[-1] = s_list[-1]._replace(SandBoxed_urls=s_list[-1].SandBoxed_urls + 1)
         except:
             pass
@@ -462,10 +464,17 @@ def draw_summary():
                     if len(res) > 1:
                         alert_error('ERROR at hashes_filename: if observed, requires fixing!!!')
                     if len(res) == 0:
-                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
+                        s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         res.append(s_list[-1])
                     i = s_list.index(res[0])
                     s_list[i] = s_list[i]._replace(Total_files=s_list[i].Total_files + 1)
+
+                    # Counting emails where attachment was dropped by gateway
+                    if _attachment_dropped_by_gateway is not None:
+                        attachment_name =ltrunc_at(line, ' | ').rstrip('\n')
+                        if attachment_name.endswith(".txt"):
+                            if _attachment_dropped_by_gateway in open(_attachments_path + '/' + attachment_name).read():
+                                s_list[i] = s_list[i]._replace(Dropped_files=s_list[i].Dropped_files + 1)
         except:
             pass
 
@@ -513,20 +522,21 @@ def draw_summary():
             pass
 
         # printing and writing to file
-        print_line = "EmlName, TotalU, MalU,  SandbU, MalF, TotalF, MaxUHit, MaxFHit, UDet, FDet"
+        print_line = "EmlName, TotalU, MalU,  SandbU, TotalF, MalF, DropF, MaxUHit, MaxFHit, UDet, FDet"
         fd_out.write(print_line + '\n')
         for item in s_list:
-            print_line = "{0:s}, {1:s}, {2:s}, {3:s}, {4:s}, " \
-                         "{5:s}, {6:s}, {7:s}, {8:s}, {9:s}".format(item.Eml_name,
-                                                                    str(item.Total_urls),
-                                                                    str(item.Mal_urls),
-                                                                    str(item.SandBoxed_urls),
-                                                                    str(item.Mal_files),
-                                                                    str(item.Total_files),
-                                                                    str(item.MaxU_hit),
-                                                                    str(item.MaxF_hit),
-                                                                    str(item.UrlDet),
-                                                                    str(item.FileDet))
+            print_line = '{0:s}, {1:s}, {2:s}, {3:s}, {4:s}, {5:s}, ' \
+                         '{6:s}, {7:s}, {8:s}, {9:s}, {10:s}'.format(item.Eml_name,
+                                                                     str(item.Total_urls),
+                                                                     str(item.Mal_urls),
+                                                                     str(item.SandBoxed_urls),
+                                                                     str(item.Total_files),
+                                                                     str(item.Mal_files),
+                                                                     str(item.Dropped_files),
+                                                                     str(item.MaxU_hit),
+                                                                     str(item.MaxF_hit),
+                                                                     str(item.UrlDet),
+                                                                     str(item.FileDet))
             fd_out.write(print_line + '\n')
     display_as_table(analysis_summary_filename_full)
 
