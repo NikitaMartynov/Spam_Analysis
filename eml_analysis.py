@@ -83,6 +83,9 @@ _input_path = '.'
 
 _not_present_in_vt = "not present"
 
+# Url used to sadbox suspicious URLs at the email gateway. Set to None if no sandboxing at the gateway happens
+_urls_sandboxed_by_vendor = "http://secure-web.cisco.com"
+
 
 def rtrunc_at(s, d, n=1):
     "Returns s truncated from the right at the n'th (3rd by default) occurrence of the delimiter, d."
@@ -383,7 +386,7 @@ def draw_summary():
     with codecs.open(analysis_summary_filename_full, 'wb', 'utf-8') as fd_out:
         # named tuple to store results before writing to file
         s_tuple = namedtuple('summary_tuple',
-                             'Eml_name Mal_urls Total_urls Vt_rej_urls Mal_files  Total_files MaxU_hit MaxF_hit UrlDet FileDet')
+                             'Eml_name Total_urls Mal_urls  SandBoxed_urls Mal_files  Total_files MaxU_hit MaxF_hit UrlDet FileDet')
         s_list = []
 
         # url summary calculation
@@ -399,8 +402,12 @@ def draw_summary():
                     if current_fname != prev_fname:
                         s_list.append(s_tuple(current_fname, 0, 0, 0, 0, 0, 0, 0, '', ''))
                         prev_fname = current_fname
-
                     s_list[-1] = s_list[-1]._replace(Total_urls=s_list[-1].Total_urls + 1)
+
+                    if _urls_sandboxed_by_vendor is not None:
+                        url = ltrunc_at(line, ' | ')
+                        if url.startswith(_urls_sandboxed_by_vendor):
+                            s_list[-1] = s_list[-1]._replace(SandBoxed_urls=s_list[-1].SandBoxed_urls + 1)
         except:
             pass
 
@@ -491,10 +498,10 @@ def draw_summary():
                     current_fname = ltrunc_at(rtrunc_at(line, ' | ', 4), ' | ', 3)
                     res = [item for item in s_list if item.Eml_name == current_fname]
                     if len(res) > 1:
-                        alert_error('ERROR1 at vt_resubmited: if observed, requires fixing!!!')
+                        alert_error('ERROR1 at vt_resubmited: if observed, requires investigation!!!')
                     i = s_list.index(res[0])
                     if _not_present_in_vt in line:
-                        alert_error('ERROR2 at vt_resubmited: if observed, requires fixing!!!')
+                        alert_error('ERROR2 at vt_resubmited: if observed, requires investigation!!!')
                         continue
                     vt_av_hit_count = get_av_hit_count(line)
                     if vt_av_hit_count != '0':
@@ -506,14 +513,14 @@ def draw_summary():
             pass
 
         # printing and writing to file
-        print_line = "EmlName, MalUrls, TotalUrls, VTrej, MalFiles, TotalFiles, MaxUrlHit, MaxFileHit, UrlDet, FileDet"
+        print_line = "EmlName, TotalU, MalU,  SandbU, MalF, TotalF, MaxUHit, MaxFHit, UDet, FDet"
         fd_out.write(print_line + '\n')
         for item in s_list:
             print_line = "{0:s}, {1:s}, {2:s}, {3:s}, {4:s}, " \
                          "{5:s}, {6:s}, {7:s}, {8:s}, {9:s}".format(item.Eml_name,
-                                                                    str(item.Mal_urls),
                                                                     str(item.Total_urls),
-                                                                    str(item.Vt_rej_urls),
+                                                                    str(item.Mal_urls),
+                                                                    str(item.SandBoxed_urls),
                                                                     str(item.Mal_files),
                                                                     str(item.Total_files),
                                                                     str(item.MaxU_hit),
