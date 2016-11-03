@@ -123,6 +123,8 @@ def parse():
                         filename = a['filename']
 
                     filename = eml_filename + ' | ' + filename
+                    # removing return carriage and new like chars from the filenames
+                    filename = filename.replace("\r\n", "")
                     filename_path = os.path.join(_attachments_path, filename)
 
                     print '\tWriting attachment:', filename_path
