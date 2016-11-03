@@ -45,7 +45,7 @@
 #                        ./parsed_output/analysis_summary. Prerequisite: -p,
 #                        -hvt, -uvt, -snfvt, -reuvt, -rehvt
 #
-# Example of usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -rehvt -s
+# Example of common usage: eml_analysis.py -p -hvt -uvt -snfvt -reuvt -s
 #
 #
 # IMPORTANT:
